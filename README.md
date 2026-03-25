@@ -119,7 +119,57 @@ Result: benign update scores 21, stealth attack scores 144 (7x ratio).
 
 ## Getting started
 
-### 1. Install
+### Docker (recommended)
+
+The fastest way to get started. Requires [Docker](https://docs.docker.com/get-docker/).
+
+```bash
+# Build
+docker build -t sent .
+
+# Bootstrap the dependency graph (run once)
+docker run --rm -v sent-data:/app/data sent bootstrap
+
+# Start monitoring
+docker run --rm -v sent-data:/app/data sent watch -t 8 -i 30
+
+# Analyze a specific package
+docker run --rm -v sent-data:/app/data sent analyze requests -e pypi
+
+# Show top risky packages
+docker run --rm -v sent-data:/app/data sent top
+```
+
+The `sent-data` named volume persists the database and download cache between runs.
+
+To pass environment variables (alert webhook, AI keys, etc.):
+
+```bash
+docker run --rm -v sent-data:/app/data \
+  -e SENT_ALERT_WEBHOOK=https://hooks.slack.com/services/T.../B.../xxx \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  sent watch -t 8 -i 30
+```
+
+**dyana dynamic analysis** — the Docker image ships with dyana and the Docker CLI pre-installed.
+Mount the host Docker socket so dyana can launch sandbox containers:
+
+```bash
+# On-demand analysis with dyana detonation
+docker run --rm -v sent-data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  sent analyze requests -e pypi --dyana
+
+# Automatic dyana detonation during monitoring
+docker run --rm -v sent-data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e SENT_DYANA=1 -e SENT_DYANA_MIN_SCORE=200 \
+  sent watch -t 8 -i 30
+```
+
+### Manual install
+
+#### 1. Install
 
 ```bash
 pip install httpx networkx rich click
@@ -127,7 +177,7 @@ pip install httpx networkx rich click
 # WordPress support requires SVN (macOS: brew install subversion)
 ```
 
-### 2. Bootstrap the dependency graph
+#### 2. Bootstrap the dependency graph
 
 Run this once. It fetches the top 200 packages from PyPI and npm, builds the dependency graph, and computes cascade weights. Takes ~10 seconds.
 
@@ -148,7 +198,7 @@ You should see something like:
 
 Without this step, all packages score 0 and nothing gets analyzed.
 
-### 3. Start monitoring
+#### 3. Start monitoring
 
 ```bash
 SENT_ALERT_MIN_SCORE=500 python3 cli.py watch -t 8 -i 30
@@ -193,7 +243,7 @@ Leave this running in a terminal. Output looks like:
 [metrics] Cache: 1 hits, 3 misses, rate=25%
 ```
 
-### 4. Monitor from another terminal
+#### 4. Monitor from another terminal
 
 While `watch` is running, open a second terminal:
 
@@ -211,7 +261,7 @@ python3 cli.py inspect <package-name> -e pypi -j
 python3 cli.py metrics
 ```
 
-### 5. Analyze a specific package on demand
+#### 5. Analyze a specific package on demand
 
 You don't need `watch` running for this — analyze any package directly:
 
@@ -234,7 +284,7 @@ python3 cli.py analyze requests -e pypi -a claude-code
 python3 cli.py analyze requests -e pypi -a rules      # no LLM, fully offline
 ```
 
-### 6. Run the stealth attack demo
+#### 6. Run the stealth attack demo
 
 See the detection system in action with a simulated supply chain attack:
 
@@ -386,6 +436,16 @@ dyana installs the package inside an isolated container traced with eBPF, record
 
 ### Setup
 
+**Docker** — dyana and the Docker CLI are pre-installed in the image. Just mount the host Docker socket:
+
+```bash
+docker run --rm -v sent-data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  sent analyze <package> -e pypi --dyana
+```
+
+**Manual install:**
+
 ```bash
 pip install dyana
 # Docker must be running
@@ -396,12 +456,25 @@ pip install dyana
 On-demand (analyze a specific package):
 
 ```bash
+# Docker
+docker run --rm -v sent-data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  sent analyze <package> -e pypi --dyana
+
+# Manual
 python3 cli.py analyze <package> -e pypi --dyana
 ```
 
 Automatic (detonate anything SENT flags above a threshold):
 
 ```bash
+# Docker
+docker run --rm -v sent-data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e SENT_DYANA=1 -e SENT_DYANA_MIN_SCORE=200 \
+  sent watch -t 8 -i 30
+
+# Manual
 SENT_DYANA=1 SENT_DYANA_MIN_SCORE=200 python3 cli.py watch -t 8 -i 30
 ```
 
