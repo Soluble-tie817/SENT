@@ -27,7 +27,7 @@ from datetime import datetime
 from config import POLL_INTERVAL, SCORE_THRESHOLD
 from storage import db as store
 from storage.models import ReleaseEvent
-from ingestion import pypi, npm
+from ingestion import pypi, npm, wordpress
 from graph.dependency_graph import graph
 from scoring.scorer import compute_priority_score, should_analyze
 from task_queue.analysis_queue import AnalysisTask, analysis_queue
@@ -200,9 +200,14 @@ def process_release(event: ReleaseEvent):
     if eco == "pypi":
         pkg_info = pypi.fetch_package_info(name)
         prev_version = pypi.get_previous_version(name, event.version)
-    else:
+    elif eco == "npm":
         pkg_info = npm.fetch_package_info(name)
         prev_version = npm.get_previous_version(name, event.version)
+    elif eco == "wordpress":
+        pkg_info = wordpress.fetch_package_info(name)
+        prev_version = wordpress.get_previous_version(name, event.version)
+    else:
+        return
 
     downloads = 0
     if pkg_info:
@@ -238,11 +243,13 @@ def process_release(event: ReleaseEvent):
 def poll_once(ecosystems: list[str] | None = None):
     """Run one polling cycle: ingest → score → enqueue → drain queue."""
     if ecosystems is None:
-        ecosystems = ["pypi", "npm"]
+        ecosystems = ["pypi", "npm", "wordpress"]
 
     events = []
     if "pypi" in ecosystems:
         events.extend(pypi.fetch_recent_releases())
+    if "wordpress" in ecosystems:
+        events.extend(wordpress.fetch_recent_releases())
     if "npm" in ecosystems:
         events.extend(npm.fetch_recent_releases())
 
@@ -348,7 +355,7 @@ def run_daemon(ecosystems: list[str] | None = None):
     """Continuous polling with worker pool."""
     print(f"[sent] Starting daemon (poll every {POLL_INTERVAL}s, "
           f"threshold={SCORE_THRESHOLD}, workers={NUM_WORKERS})")
-    print(f"[sent] Ecosystems: {ecosystems or ['pypi', 'npm']}")
+    print(f"[sent] Ecosystems: {ecosystems or ['pypi', 'npm', 'wordpress']}")
     print(f"[sent] Press Ctrl+C to stop\n")
 
     store.init_db()
@@ -386,12 +393,20 @@ def analyze_single(name: str, ecosystem: str, version: str = "",
             version = pkg.latest_version
         if not old_version:
             old_version = pypi.get_previous_version(name, version)
-    else:
+    elif ecosystem == "npm":
         pkg = npm.fetch_package_info(name)
         if not version and pkg:
             version = pkg.latest_version
         if not old_version:
             old_version = npm.get_previous_version(name, version)
+    elif ecosystem == "wordpress":
+        pkg = wordpress.fetch_package_info(name)
+        if not version and pkg:
+            version = pkg.latest_version
+        if not old_version:
+            old_version = wordpress.get_previous_version(name, version)
+    else:
+        pkg = None
 
     if pkg:
         graph.add_package(name, ecosystem, pkg.direct_deps)

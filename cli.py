@@ -46,7 +46,7 @@ def bootstrap(pypi, npm):
 
 
 @main.command()
-@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "all"]), default="all")
+@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "wordpress", "all"]), default="all")
 @click.option("--interval", "-i", type=int, default=None, help="Poll interval in seconds")
 @click.option("--threshold", "-t", type=float, default=None, help="Score threshold override")
 def watch(ecosystem, interval, threshold):
@@ -64,7 +64,7 @@ def watch(ecosystem, interval, threshold):
 
 @main.command()
 @click.argument("package_name")
-@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm"]), default="pypi")
+@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "wordpress"]), default="pypi")
 @click.option("--version", "-v", default="", help="Version to analyze (default: latest)")
 @click.option("--old-version", "-o", default="", help="Previous version (default: auto-detect)")
 @click.option("--ai-backend", "-a",
@@ -151,7 +151,7 @@ def top(limit):
 
 @main.command()
 @click.argument("package_name")
-@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm"]), default="pypi")
+@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "wordpress"]), default="pypi")
 @click.option("--version", "-v", default="", help="Specific version (default: latest report)")
 @click.option("--json-output", "-j", is_flag=True, help="Output raw JSON")
 def inspect(package_name, ecosystem, version, json_output):
@@ -172,7 +172,7 @@ def inspect(package_name, ecosystem, version, json_output):
 
 
 @main.command()
-@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "all"]), default="all")
+@click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "wordpress", "all"]), default="all")
 @click.option("--threshold", "-t", type=float, default=None, help="Score threshold (default: 8.0, use 0 to analyze all)")
 def poll(ecosystem, threshold):
     """Run a single polling cycle."""

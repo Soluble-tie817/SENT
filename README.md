@@ -1,6 +1,6 @@
 # SENT — Supply-chain Event Network Triage
 
-Real-time supply chain threat detection for package ecosystems. Monitors PyPI and npm release streams, prioritizes packages by cascade impact across the dependency graph, and performs AST-based behavioral diff analysis to catch malicious updates — including stealth modifications to existing code — before they spread.
+Real-time supply chain threat detection for package ecosystems. Monitors PyPI, npm, and WordPress plugin release streams, prioritizes packages by cascade impact across the dependency graph, and performs AST-based behavioral diff analysis to catch malicious updates — including stealth modifications to existing code — before they spread.
 
 ![SENT watch — real-time monitoring](imm/1.png)
 
@@ -26,8 +26,8 @@ The insight: **you don't need to scan everything. 2% of packages account for 90%
 ## How it works
 
 ```
-RSS/registry feeds → scoring filter → download → AST diff → behavioral analysis → alert
-     8,100/hr           ~80/hr         cached      1.3ms         rule + LLM
+PyPI RSS + npm registry + WordPress SVN → scoring filter → diff → behavioral analysis → alert
+              8,100+/hr                     ~80/hr        cached       1.3ms         rule + LLM
 ```
 
 ### 1. Cascade-weighted dependency graph
@@ -46,11 +46,12 @@ A new release of `urllib3` gets priority score 23.3. A new release of `random-un
 
 For each high-priority release:
 
-1. Download the previous version and the new version (cached on disk)
-2. Extract and compute file-level diff (added / removed / modified)
+1. **PyPI/npm**: download previous + new version (cached on disk), extract and diff
+2. **WordPress**: `svn diff` directly from plugins.svn.wordpress.org — no download needed
 3. For Python files: **AST-based behavioral analysis** on modified files only
-4. For non-Python files: regex pattern scan as fallback
-5. **Argument-level diff** on existing function calls (catches stealth attacks)
+4. For PHP files (WordPress): **WordPress-specific pattern detection** (eval, backdoors, auth bypass, wp-config access)
+5. For JS/other: regex pattern scan as fallback
+6. **Argument-level diff** on existing function calls (catches stealth attacks)
 
 ### 3. Behavioral analysis (not regex)
 
@@ -122,6 +123,8 @@ Result: benign update scores 21, stealth attack scores 144 (7x ratio).
 
 ```bash
 pip install httpx networkx rich click
+
+# WordPress support requires SVN (macOS: brew install subversion)
 ```
 
 ### 2. Bootstrap the dependency graph
@@ -222,6 +225,10 @@ python3 cli.py analyze flask -e pypi -v 3.1.0 -o 3.0.3
 # npm package
 python3 cli.py analyze express -e npm
 
+# WordPress plugin (uses SVN diff — no download)
+python3 cli.py analyze contact-form-7 -e wordpress
+python3 cli.py analyze woocommerce -e wordpress
+
 # Choose AI backend
 python3 cli.py analyze requests -e pypi -a claude-code
 python3 cli.py analyze requests -e pypi -a rules      # no LLM, fully offline
@@ -273,7 +280,7 @@ python3 cli.py watch -t 8 -i 30
 
 | Flag | Description |
 |---|---|
-| `-e, --ecosystem` | `pypi`, `npm`, or `all` (default: `all`) |
+| `-e, --ecosystem` | `pypi`, `npm`, `wordpress`, or `all` (default: `all`) |
 | `-t, --threshold` | Priority score threshold (default: 8.0, use 0 to analyze everything) |
 | `-a, --ai-backend` | `auto`, `claude-code`, `api`, or `rules` |
 | `-v, --version` | Target version (default: latest) |
@@ -291,7 +298,8 @@ sent/
 │
 ├── ingestion/
 │   ├── pypi.py                     PyPI RSS feed + JSON API + pypistats
-│   └── npm.py                      npm registry API
+│   ├── npm.py                      npm registry API
+│   └── wordpress.py                WordPress SVN + Plugin API
 │
 ├── graph/
 │   ├── dependency_graph.py         Weighted DAG with cascade propagation
@@ -311,7 +319,8 @@ sent/
 │   ├── behavioral_scorer.py        Weighted scoring with combo bonuses
 │   ├── baseline.py                 Per-package behavioral baseline
 │   ├── download_cache.py           Disk-based archive cache
-│   ├── patterns.py                 Regex fallback (non-Python files)
+│   ├── php_patterns.py             PHP/WordPress pattern detection
+│   ├── patterns.py                 Regex fallback (JS/config files)
 │   └── context_filter.py           False positive reduction
 │
 ├── ai/
@@ -409,7 +418,7 @@ SENT filters 8,100 releases/hour down to a handful of suspects. dyana confirms o
 ## Limitations
 
 - **Heuristic-based detection**: SENT uses AST analysis and weighted scoring, not formal verification. Sophisticated attacks designed to evade structural analysis (e.g., pure data-only changes, steganography in binary assets) may not be detected.
-- **Python-first**: full AST behavioral analysis is available for Python packages. JavaScript/npm packages fall back to regex pattern matching, which has a higher false positive rate.
+- **Python-first**: full AST behavioral analysis is available for Python packages. PHP/WordPress plugins use targeted WordPress-specific pattern detection (eval, backdoors, auth bypass). JavaScript/npm falls back to generic regex matching.
 - **Download data accuracy**: SENT uses pypistats.org for real download counts (cached 1h per package). For packages not covered, it falls back to release count as a proxy.
 - **Graph completeness**: the cascade weight is only as good as the graph. The bootstrap seeds ~900 packages. Packages outside this set start with cascade_weight = own_downloads until the graph grows through ingestion.
 - **Not a replacement for code review**: SENT is an early warning system. High-confidence detections should still be verified manually or by a security team.
@@ -440,5 +449,6 @@ The key observations that shaped this project:
 - **@N3mes1s** measured ~8,100 live release events/hour across PyPI, npm, and crates.io — and pointed out that no "dependency scanning" company catches this in real time
 - **@evilsocket** proposed the cascade-weighted dependency graph approach: create a weighted global graph where the weight of each node is the cumulative downloads of all its dependencies (in cascade), and reflect that weight back in the chain to prioritize scanning
 - **@evilsocket** also proposed the diff-first strategy: when a new version is out, don't feed the entire thing to AI — diff it with the previous version and only send the diff
+- **@evilsocket** pointed to the WordPress plugins SVN repository (plugins.svn.wordpress.org) as a public, almost unknown source for monitoring WordPress plugin updates — with SVN providing diffs between versions without needing to download full archives
 
 SENT is an implementation of these ideas.

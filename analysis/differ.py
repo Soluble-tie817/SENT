@@ -407,7 +407,11 @@ def analyze_package(
         previous_version=old_version,
     )
 
-    # --- Download ---
+    # WordPress: use SVN diff (no download needed)
+    if ecosystem == "wordpress":
+        return _analyze_wordpress(report, name, new_version, old_version)
+
+    # --- Download (PyPI / npm) ---
     if ecosystem == "pypi":
         old_url = _pypi_sdist_url(name, old_version)
         new_url = _pypi_sdist_url(name, new_version)
@@ -509,6 +513,90 @@ def analyze_package(
         full_merged.attribute_access,
     )
     save_baseline(name, ecosystem, updated_baseline)
+
+    return report
+
+
+# ---------------------------------------------------------------------------
+# WordPress analysis — SVN-based, no download
+# ---------------------------------------------------------------------------
+
+def _analyze_wordpress(
+    report: DiffReport,
+    slug: str,
+    new_version: str,
+    old_version: str,
+) -> DiffReport:
+    """
+    Analyze a WordPress plugin using SVN diff.
+    No download — SVN computes the diff server-side.
+    PHP files are scanned with WordPress-specific patterns.
+    """
+    from ingestion.wordpress import svn_diff, parse_svn_diff
+    from analysis.php_patterns import is_php_file, scan_php_line
+
+    diff_text = svn_diff(slug, old_version, new_version)
+    if not diff_text:
+        report.summary = f"Could not get SVN diff for {slug}"
+        return report
+
+    added_f, removed_f, modified_f, file_diffs = parse_svn_diff(diff_text)
+    report.files_added = added_f
+    report.files_removed = removed_f
+    report.files_modified = modified_f
+
+    flags = []
+
+    # Scan added lines in PHP files
+    for filepath, lines in file_diffs.items():
+        if not is_php_file(filepath) and not is_scannable(filepath):
+            continue
+
+        for line_num, line in lines:
+            # PHP patterns
+            if is_php_file(filepath):
+                for pattern, matched in scan_php_line(line):
+                    flags.append(DiffFlag(
+                        category=pattern.category,
+                        pattern=pattern.name,
+                        score=pattern.score,
+                        file_path=filepath,
+                        line_number=line_num,
+                        snippet=line.strip()[:200],
+                    ))
+            # Generic patterns (JS, config files, etc.)
+            else:
+                for rule, matched in scan_line(line):
+                    flags.append(DiffFlag(
+                        category=rule.category,
+                        pattern=rule.name,
+                        score=rule.score,
+                        file_path=filepath,
+                        line_number=line_num,
+                        snippet=line.strip()[:200],
+                    ))
+
+    # Apply context filter
+    from analysis.context_filter import apply_context_filter
+    flags = apply_context_filter(flags)
+
+    report.flags = flags
+    report.risk_score = sum(f.score for f in flags)
+
+    # Build summary
+    categories = {}
+    for f in flags:
+        categories[f.category] = categories.get(f.category, 0) + 1
+    if flags:
+        parts = [f"{v}x {k}" for k, v in sorted(categories.items(), key=lambda x: -x[1])]
+        report.summary = (
+            f"Score {report.risk_score}: {', '.join(parts)}. "
+            f"Files: +{len(added_f)} -{len(removed_f)} ~{len(modified_f)}"
+        )
+    else:
+        report.summary = (
+            f"Clean diff. Files: +{len(added_f)} -{len(removed_f)} ~{len(modified_f)}"
+        )
 
     return report
 
