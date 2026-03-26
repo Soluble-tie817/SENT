@@ -177,18 +177,23 @@ def dyana_queue_size() -> int:
 # Core detonation (unchanged, called by the background thread)
 # ---------------------------------------------------------------------------
 
-def detonate(package_name: str, version: str, timeout: int = 300) -> DyanaReport:
+def detonate(package_name: str, version: str, timeout: int = 0) -> DyanaReport:
     """Run dyana on a package. Called by background thread."""
     report = DyanaReport(package_name=package_name, version=version)
 
     pkg_spec = f"{package_name}=={version}" if version else package_name
 
     try:
+        kwargs = {
+            "capture_output": True,
+            "text": True,
+        }
+        if timeout > 0:
+            kwargs["timeout"] = timeout
+
         result = subprocess.run(
             ["dyana", "trace", "--loader", "pip", "--package", pkg_spec],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+            **kwargs,
         )
 
         report.raw_output = result.stdout + result.stderr
