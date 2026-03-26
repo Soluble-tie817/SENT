@@ -46,16 +46,32 @@ def bootstrap(pypi, npm):
 
 
 @main.command()
+@click.argument("filepath")
+@click.option("--no-transitive", is_flag=True, help="Only direct deps, skip transitive resolution")
+def sbom(filepath, no_transitive):
+    """Import your SBOM (requirements.txt, package.json) and boost those packages."""
+    store.init_db()
+    from graph.sbom import import_sbom
+    import_sbom(filepath, resolve_transitive=not no_transitive)
+
+
+@main.command()
 @click.option("--ecosystem", "-e", type=click.Choice(["pypi", "npm", "wordpress", "all"]), default="all")
 @click.option("--interval", "-i", type=int, default=None, help="Poll interval in seconds")
 @click.option("--threshold", "-t", type=float, default=None, help="Score threshold override")
-def watch(ecosystem, interval, threshold):
+@click.option("--sbom-file", type=click.Path(exists=True), default=None, help="SBOM file to boost (requirements.txt, package.json)")
+def watch(ecosystem, interval, threshold, sbom_file):
     """Start polling for new releases and analyzing them."""
     import config
     if interval:
         config.POLL_INTERVAL = interval
     if threshold:
         config.SCORE_THRESHOLD = threshold
+
+    if sbom_file:
+        store.init_db()
+        from graph.sbom import import_sbom
+        import_sbom(sbom_file)
 
     from main import run_daemon
     ecosystems = None if ecosystem == "all" else [ecosystem]
